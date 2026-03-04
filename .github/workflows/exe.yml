@@ -1,0 +1,46 @@
+name: Download URL, Package as EXE and Save to GitHub
+on:
+  workflow_dispatch:
+    inputs:
+      file_url:
+        description: "Direct file URL to download"
+        required: true
+        type: string
+
+jobs:
+  download-and-package:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install 7zip (for SFX creation)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y p7zip-full
+
+      - name: Download file from URL
+        shell: bash
+        run: |
+          mkdir -p download
+          cd download
+          # הורדת הקובץ מהקישור שהוזן
+          curl -L -O -J "${{ github.event.inputs.file_url }}"
+          ls -lh
+          cd ..
+
+      - name: Create Self-Extracting EXE (SFX)
+        shell: bash
+        run: |
+          # אריזת התוכן של תיקיית ההורדות לתוך קובץ EXE לחילוץ עצמי
+          7z a -sfx7z.sfx Installer.exe ./download/*
+          ls -lh Installer.exe
+
+      - name: Upload EXE to GitHub Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Extractor-EXE
+          path: Installer.exe
+          retention-days: 7 # הקובץ יישמר בגיטהאב למשך 7 ימים
+
+      - name: Cleanup
+        shell: bash
+        run: rm -rf download Installer.exe
