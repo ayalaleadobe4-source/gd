@@ -1,0 +1,32 @@
+name: Download URL and Save to GitHub
+on:
+  workflow_dispatch:
+    inputs:
+      file_url:
+        description: "Direct file URL to download"
+        required: true
+        type: string
+
+jobs:
+  download-file:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download file from URL
+        shell: bash
+        run: |
+          mkdir -p download
+          cd download
+          curl -L -O -J "${{ github.event.inputs.file_url }}"
+          ls -lh
+
+      - name: Upload File to GitHub Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Downloaded-File
+          path: download/
+          retention-days: 7
+
+      - name: Cleanup
+        shell: bash
+        run: rm -rf download
