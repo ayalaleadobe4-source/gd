@@ -1,77 +1,61 @@
-name: Remote Browser via Cloudflare
+name: Browser Final No-Loop
 
 on:
   workflow_dispatch:
 
 jobs:
-  browser-session:
+  run-browser:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Desktop & Browser
+      - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y x11vnc xvfb fluxbox chromium-browser curl jq
+          sudo apt-get install -y xvfb x11vnc fluxbox chromium-browser curl jq
           git clone https://github.com/novnc/noVNC.git noVNC
           git clone https://github.com/novnc/websockify noVNC/utils/websockify
-
-      - name: Install Cloudflare Tunnel
-        run: |
+          
+          # התקנת קלאודפלייר
           curl -L --output cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
           sudo dpkg -i cloudflared.deb
 
-      - name: Start Environment and Tunnel
+      - name: Start Services
         run: |
-          # 1. הגדרת משתנה תצוגה
-          export DISPLAY=:1
+          # 1. הגדרת מסך וירטואלי (DISPLAY 0)
+          export DISPLAY=:0
+          Xvfb :0 -screen 0 1920x1080x24 -ac +extension GLX +render -noreset &
           
-          # 2. הפעלת Xvfb עם הגדרות תאימות רחבות
-          Xvfb :1 -screen 0 1920x1080x24 -ac +extension GLX +render -noreset &
+          # המתנה קבועה של 10 שניות - בלי לולאות בדיקה
+          sleep 10
           
-          # המתנה ולוודא שה-XServer באמת רץ
-          echo "Waiting for Xvfb to be ready..."
-          until xset -display :1 q > /dev/null 2>&1; do
-            echo "Xvfb is not ready yet, sleeping..."
-            sleep 1
-          done
-          echo "Xvfb is UP!"
-
-          # 3. הפעלת מנהל חלונות
+          # 2. הפעלת מנהל חלונות
           fluxbox &
-          sleep 2
-          
-          # 4. הפעלת שרת ה-VNC עם הגדרות לתיקון השגיאה שקיבלת
-          x11vnc -display :1 -nopw -forever -bg -listen localhost -noxrecord -noxfixes -shared &
           sleep 3
           
-          # 5. הפעלת noVNC
-          ./noVNC/utils/novnc_proxy --vnc localhost:5900 --listen 8080 &
-          sleep 2
+          # 3. הפעלת VNC
+          x11vnc -display :0 -nopw -forever -bg -listen localhost -shared -noxfixes -noxdamage -noxrecord &
+          sleep 5
           
-          # 6. הפעלת הדפדפן
-          chromium-browser --no-sandbox --window-size=1920,1080 --start-maximized &
+          # 4. הפעלת noVNC על פורט 8080
+          ./noVNC/utils/novnc_proxy --vnc localhost:5900 --listen 8080 &
+          sleep 3
+          
+          # 5. הפעלת דפדפן (עם דגלים למניעת קריסות זיכרון)
+          chromium-browser --no-sandbox --disable-dev-shm-usage --window-size=1920,1080 --start-maximized &
 
-          # 7. יצירת הצינור של קלאודפלייר
+          # 6. יצירת הצינור של קלאודפלייר
           cloudflared tunnel --url http://localhost:8080 --metrics localhost:36500 &
           
-          echo "Waiting for Cloudflare URL..."
-          # המתנה קצת יותר ארוכה לכתובת
+          echo "Waiting 20 seconds for URL generation..."
           sleep 20
           
           echo "---------------------------------------------------"
-          echo "Your Remote Browser is ready at:"
-          # ניסיון חילוץ הכתובת כמה פעמים אם היא לא מופיעה מיד
-          for i in {1..5}; do
-            URL=$(curl -s http://localhost:36500/metrics | grep -o 'https://[^ ]*\.trycloudflare\.com' | head -n 1)
-            if [ ! -z "$URL" ]; then
-              echo "$URL"
-              break
-            fi
-            sleep 5
-          done
+          echo "CLICK THE LINK BELOW TO OPEN THE BROWSER:"
+          # ניסיון חילוץ הכתובת
+          curl -s http://localhost:36500/metrics | grep -o 'https://[^ ]*\.trycloudflare\.com' | head -n 1
           echo "---------------------------------------------------"
           
-          # שמירה על ה-Job פעיל
+          # שמירה על השרת דלוק
           sleep 18000
