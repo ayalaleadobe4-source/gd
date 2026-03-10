@@ -1,16 +1,14 @@
-name: Record Website Scroll
+name: Record Website and Convert to GIF
 
-# הפעלה ידנית עם אפשרות להכניס כתובת אתר
 on:
   workflow_dispatch:
     inputs:
       url:
-        description: 'הכנס את כתובת האתר (כולל https://)'
+        description: 'הכנס את כתובת האתר'
         required: true
-        default: 'https://example.com'
 
 jobs:
-  record-video:
+  record-and-convert:
     runs-on: ubuntu-latest
 
     steps:
@@ -31,8 +29,19 @@ jobs:
       - name: Run Playwright Script
         run: node record.js "${{ github.event.inputs.url }}"
 
-      - name: Upload Video Artifact
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Convert WebM to optimized GIF
+        run: |
+          # מציאת קובץ הוידאו שנוצר
+          WEBM_FILE=$(ls videos/*.webm | head -n 1)
+          
+          # המרה ל-GIF ברוחב 400px עם 10 פריימים בשנייה לטובת דחיסה אופטימלית
+          ffmpeg -i "$WEBM_FILE" -vf "fps=10,scale=400:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse" -loop 0 output.gif
+
+      - name: Upload GIF Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: website-scroll-video
-          path: videos/
+          name: website-scroll-gif
+          path: output.gif
