@@ -7,28 +7,25 @@ if (!url) {
 }
 
 (async () => {
-  // פתיחת דפדפן כרום
   const browser = await chromium.launch();
   
-  // יצירת הקשר (Context) והגדרת תיקיית השמירה של הוידאו וגודל המסך
+  // הגדרת הרזולוציה ל- 1920x1080
   const context = await browser.newContext({
     recordVideo: { dir: 'videos/' },
-    viewport: { width: 1280, height: 720 }
+    viewport: { width: 1920, height: 1080 }
   });
   
   const page = await context.newPage();
 
   console.log(`Navigating to ${url}...`);
-  // מעבר לכתובת והמתנה עד שהרשת תהיה שקטה (הכל נטען)
   await page.goto(url, { waitUntil: 'networkidle' });
 
   console.log('Scrolling down for 5 seconds...');
   
-  // פונקציית גלילה חלקה במשך 5 שניות
   await page.evaluate(async () => {
     await new Promise((resolve) => {
-      const duration = 5000; // 5 שניות
-      const intervalTime = 50; // כל 50 מילישניות נבצע גלילה קטנה
+      const duration = 5000;
+      const intervalTime = 50;
       const totalScrollDistance = document.body.scrollHeight - window.innerHeight;
       const ticks = duration / intervalTime;
       const scrollStep = totalScrollDistance / ticks;
@@ -37,7 +34,6 @@ if (!url) {
         window.scrollBy(0, scrollStep);
       }, intervalTime);
 
-      // עצירת הגלילה אחרי 5 שניות
       setTimeout(() => {
         clearInterval(timer);
         resolve();
@@ -45,7 +41,6 @@ if (!url) {
     });
   });
 
-  // סגירת ההקשר שומרת את הוידאו באופן סופי
   await context.close();
   await browser.close();
   console.log('Video saved successfully!');
