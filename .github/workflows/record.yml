@@ -1,0 +1,38 @@
+name: Record Website Scroll
+
+# הפעלה ידנית עם אפשרות להכניס כתובת אתר
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 'הכנס את כתובת האתר (כולל https://)'
+        required: true
+        default: 'https://example.com'
+
+jobs:
+  record-video:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: |
+          npm init -y
+          npm install playwright
+          npx playwright install --with-deps chromium
+
+      - name: Run Playwright Script
+        run: node record.js "${{ github.event.inputs.url }}"
+
+      - name: Upload Video Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: website-scroll-video
+          path: videos/
