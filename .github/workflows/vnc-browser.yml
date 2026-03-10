@@ -19,20 +19,30 @@ jobs:
 
       - name: Start Browser & VNC
         run: |
-          # הפעלת המסך הוירטואלי
-          Xvfb :1 -screen 0 1920x1080x24 &
+          # 1. הגדרת מסך וירטואלי
           export DISPLAY=:1
+          Xvfb :1 -screen 0 1920x1080x24 -ac &
+          
+          # המתנה לטעינת המסך
+          echo "Waiting for Xvfb..."
+          sleep 5
+          
+          # 2. הפעלת מנהל חלונות
           fluxbox &
-          x11vnc -display :1 -nopw -forever -bg -listen localhost
+          sleep 2
           
-          # הפעלת noVNC בפורט 8080 בתוך השרת
+          # 3. הפעלת שרת VNC עם תיקוני יציבות
+          x11vnc -display :1 -nopw -forever -bg -listen localhost -noxrecord -noxfixes &
+          sleep 2
+          
+          # 4. הפעלת noVNC בפורט 8080
           ./noVNC/utils/novnc_proxy --vnc localhost:5900 --listen 8080 &
+          sleep 2
           
-          # הפעלת הדפדפן
-          chromium-browser --no-sandbox --window-size=1920,1080 &
+          # 5. הפעלת הדפדפן
+          chromium-browser --no-sandbox --window-size=1920,1080 --start-maximized &
 
       - name: Setup SSH Tunnel (tmate)
         uses: mxschmitt/action-tmate@v3
         with:
-          # זה ימנע מהתהליך להיסגר מיד
           limit-access-to-actor: false
