@@ -1,0 +1,59 @@
+name: Remote Browser via Cloudflare
+
+on:
+  workflow_dispatch:
+
+jobs:
+  browser-session:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Desktop & Browser
+        run: |
+          sudo apt-get update
+          # התקנת כלים גרפיים, דפדפן ומנהל חלונות
+          sudo apt-get install -y x11vnc xvfb fluxbox chromium-browser
+          
+          # הורדת ממשק noVNC (הדפדפן שמציג את ה-VNC)
+          git clone https://github.com/novnc/noVNC.git noVNC
+          git clone https://github.com/novnc/websockify noVNC/utils/websockify
+
+      - name: Install Cloudflare Tunnel
+        run: |
+          # הורדת הכלי הרשמי של קלאודפלייר
+          curl -L --output cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+          sudo dpkg -i cloudflared.deb
+
+      - name: Start Environment and Tunnel
+        run: |
+          # 1. הקמת מסך וירטואלי
+          Xvfb :1 -screen 0 1920x1080x24 &
+          export DISPLAY=:1
+          
+          # 2. הפעלת מנהל חלונות ושרת VNC
+          fluxbox &
+          x11vnc -display :1 -nopw -forever -bg -listen localhost
+          
+          # 3. הפעלת הגישור לדפדפן (noVNC) בפורט 8080
+          ./noVNC/utils/novnc_proxy --vnc localhost:5900 --listen 8080 &
+          
+          # 4. הפעלת הדפדפן עצמו
+          chromium-browser --no-sandbox --window-size=1920,1080 --start-maximized &
+
+          # 5. יצירת הצינור של קלאודפלייר
+          # הפרמטר --metrics מאפשר לנו לחלץ את הכתובת בצורה אוטומטית
+          cloudflared tunnel --url http://localhost:8080 --metrics localhost:36500 &
+          
+          echo "Waiting for Cloudflare to generate URL..."
+          sleep 15
+          
+          echo "---------------------------------------------------"
+          echo "Your Remote Browser is ready at:"
+          # חילוץ הכתובת מתוך ממשק המדדים של cloudflared
+          curl -s http://localhost:36500/metrics | grep -o 'https://[^ ]*\.trycloudflare\.com' | head -n 1
+          echo "---------------------------------------------------"
+          
+          # השארת השרת דלוק ל-5 שעות
+          sleep 18000
