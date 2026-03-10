@@ -13,47 +13,65 @@ jobs:
       - name: Install Desktop & Browser
         run: |
           sudo apt-get update
-          # התקנת כלים גרפיים, דפדפן ומנהל חלונות
-          sudo apt-get install -y x11vnc xvfb fluxbox chromium-browser
-          
-          # הורדת ממשק noVNC (הדפדפן שמציג את ה-VNC)
+          sudo apt-get install -y x11vnc xvfb fluxbox chromium-browser curl jq
           git clone https://github.com/novnc/noVNC.git noVNC
           git clone https://github.com/novnc/websockify noVNC/utils/websockify
 
       - name: Install Cloudflare Tunnel
         run: |
-          # הורדת הכלי הרשמי של קלאודפלייר
           curl -L --output cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
           sudo dpkg -i cloudflared.deb
 
       - name: Start Environment and Tunnel
         run: |
-          # 1. הקמת מסך וירטואלי
-          Xvfb :1 -screen 0 1920x1080x24 &
+          # 1. הגדרת משתנה תצוגה
           export DISPLAY=:1
           
-          # 2. הפעלת מנהל חלונות ושרת VNC
+          # 2. הפעלת Xvfb עם הגדרות תאימות רחבות
+          Xvfb :1 -screen 0 1920x1080x24 -ac +extension GLX +render -noreset &
+          
+          # המתנה ולוודא שה-XServer באמת רץ
+          echo "Waiting for Xvfb to be ready..."
+          until xset -display :1 q > /dev/null 2>&1; do
+            echo "Xvfb is not ready yet, sleeping..."
+            sleep 1
+          done
+          echo "Xvfb is UP!"
+
+          # 3. הפעלת מנהל חלונות
           fluxbox &
-          x11vnc -display :1 -nopw -forever -bg -listen localhost
+          sleep 2
           
-          # 3. הפעלת הגישור לדפדפן (noVNC) בפורט 8080
+          # 4. הפעלת שרת ה-VNC עם הגדרות לתיקון השגיאה שקיבלת
+          x11vnc -display :1 -nopw -forever -bg -listen localhost -noxrecord -noxfixes -shared &
+          sleep 3
+          
+          # 5. הפעלת noVNC
           ./noVNC/utils/novnc_proxy --vnc localhost:5900 --listen 8080 &
+          sleep 2
           
-          # 4. הפעלת הדפדפן עצמו
+          # 6. הפעלת הדפדפן
           chromium-browser --no-sandbox --window-size=1920,1080 --start-maximized &
 
-          # 5. יצירת הצינור של קלאודפלייר
-          # הפרמטר --metrics מאפשר לנו לחלץ את הכתובת בצורה אוטומטית
+          # 7. יצירת הצינור של קלאודפלייר
           cloudflared tunnel --url http://localhost:8080 --metrics localhost:36500 &
           
-          echo "Waiting for Cloudflare to generate URL..."
-          sleep 15
+          echo "Waiting for Cloudflare URL..."
+          # המתנה קצת יותר ארוכה לכתובת
+          sleep 20
           
           echo "---------------------------------------------------"
           echo "Your Remote Browser is ready at:"
-          # חילוץ הכתובת מתוך ממשק המדדים של cloudflared
-          curl -s http://localhost:36500/metrics | grep -o 'https://[^ ]*\.trycloudflare\.com' | head -n 1
+          # ניסיון חילוץ הכתובת כמה פעמים אם היא לא מופיעה מיד
+          for i in {1..5}; do
+            URL=$(curl -s http://localhost:36500/metrics | grep -o 'https://[^ ]*\.trycloudflare\.com' | head -n 1)
+            if [ ! -z "$URL" ]; then
+              echo "$URL"
+              break
+            fi
+            sleep 5
+          done
           echo "---------------------------------------------------"
           
-          # השארת השרת דלוק ל-5 שעות
+          # שמירה על ה-Job פעיל
           sleep 18000
